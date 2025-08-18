@@ -1,39 +1,52 @@
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import 'dotenv/config';
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+});
 
 client.once('ready', () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
 });
 
-// ==== COMMANDE SLASH ====
-
+// ========== Commandes Slash ==========
 const commands = [
   new SlashCommandBuilder()
     .setName('écrire')
-    .setDescription('Le bot écrit le message à votre place.')
+    .setDescription('Le bot écrit le message à votre place dans le salon')
     .addStringOption(option =>
       option.setName('texte')
         .setDescription('Le message à envoyer')
-        .setRequired(false)
+        .setRequired(true)
     )
     .addAttachmentOption(option =>
       option.setName('image')
-        .setDescription('Image à envoyer')
-        .setRequired(false)
+        .setDescription("Image à joindre (facultative)")
+    ),
+
+  new SlashCommandBuilder()
+    .setName('envoyer')
+    .setDescription('Envoyer un message privé à un utilisateur, anonymement')
+    .addUserOption(option =>
+      option.setName('destinataire')
+        .setDescription("L'utilisateur à qui envoyer le message")
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName('texte')
+        .setDescription('Le message à envoyer')
+        .setRequired(true)
     )
 ].map(cmd => cmd.toJSON());
 
+// Enregistrement des commandes
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-rest.put(
-  Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+await rest.put(
+  Routes.applicationCommands(process.env.CLIENT_ID),
   { body: commands }
-).then(() => console.log("🟢 Commande enregistrée."))
-  .catch(console.error);
+);
 
-// ==== RÉPONSE À LA COMMANDE ====
-
+// ========== Réactions aux commandes ==========
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -41,15 +54,27 @@ client.on('interactionCreate', async interaction => {
     const texte = interaction.options.getString('texte');
     const image = interaction.options.getAttachment('image');
 
+    const messagePayload = { content: texte };
+    if (image) {
+      messagePayload.files = [image];
+    }
+
+    await interaction.reply({ content: '✅ Message envoyé !', ephemeral: true });
+    await interaction.channel.send(messagePayload);
+  }
+
+  else if (interaction.commandName === 'envoyer') {
+    const user = interaction.options.getUser('destinataire');
+    const texte = interaction.options.getString('texte');
+
     await interaction.deferReply({ ephemeral: true });
 
-    const messagePayload = {};
-    if (texte) messagePayload.content = texte;
-    if (image) messagePayload.files = [image.url];
-
-    await interaction.channel.send(messagePayload);
-
-    await interaction.editReply('✉️ Message envoyé sans mention de ton pseudo !');
+    try {
+      await user.send(`📨 ${texte}`);
+      await interaction.editReply('✅ Message privé envoyé anonymement !');
+    } catch (err) {
+      await interaction.editReply('❌ Impossible d’envoyer un message privé à cet utilisateur.');
+    }
   }
 });
 
