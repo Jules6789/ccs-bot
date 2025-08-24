@@ -13,11 +13,11 @@ client.once('ready', () => {
 const commands = [
   new SlashCommandBuilder()
     .setName('écrire')
-    .setDescription('Le bot écrit le message à votre place dans le salon')
+    .setDescription('Le bot écrit le message ou poste une image à votre place dans le salon')
     .addStringOption(option =>
       option.setName('texte')
         .setDescription('Le message à envoyer')
-        .setRequired(true)
+        .setRequired(false) // 👈 le texte devient facultatif
     )
     .addAttachmentOption(option =>
       option.setName('image')
@@ -39,7 +39,6 @@ const commands = [
     )
 ].map(cmd => cmd.toJSON());
 
-// Enregistrement des commandes
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 await rest.put(
   Routes.applicationCommands(process.env.CLIENT_ID),
@@ -54,10 +53,14 @@ client.on('interactionCreate', async interaction => {
     const texte = interaction.options.getString('texte');
     const image = interaction.options.getAttachment('image');
 
-    const messagePayload = { content: texte };
-    if (image) {
-      messagePayload.files = [image];
+    if (!texte && !image) {
+      await interaction.reply({ content: '❌ Tu dois au moins fournir un texte ou une image.', ephemeral: true });
+      return;
     }
+
+    const messagePayload = {};
+    if (texte) messagePayload.content = texte;
+    if (image) messagePayload.files = [image];
 
     await interaction.reply({ content: '✅ Message envoyé !', ephemeral: true });
     await interaction.channel.send(messagePayload);
