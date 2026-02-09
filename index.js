@@ -1,79 +1,81 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
-import 'dotenv/config';
+const { Client, GatewayIntentBits, AttachmentBuilder, SlashCommandBuilder, REST, Routes } = require("discord.js");
+require("dotenv").config();
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
 });
 
-// ========== Connexion ==========
-client.once('ready', () => {
-  console.log(`✅ Connecté en tant que ${client.user.tag}`);
-});
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
 
-// ========== Déclaration de la commande ==========
 const commands = [
   new SlashCommandBuilder()
-    .setName('écrire')
-    .setDescription('Le bot écrit un message à ta place.')
+    .setName("écrire")
+    .setDescription("Envoie un message anonyme avec ou sans image")
     .addStringOption(option =>
-      option.setName('texte')
-        .setDescription('Le message à envoyer')
-        .setRequired(false)
-    )
-    .addAttachmentOption(option => option.setName('image1').setDescription("Image 1"))
-    .addAttachmentOption(option => option.setName('image2').setDescription("Image 2"))
-    .addAttachmentOption(option => option.setName('image3').setDescription("Image 3"))
-    .addAttachmentOption(option => option.setName('image4').setDescription("Image 4"))
-    .addAttachmentOption(option => option.setName('image5').setDescription("Image 5"))
-    .addAttachmentOption(option => option.setName('image6').setDescription("Image 6"))
-].map(cmd => cmd.toJSON());
+      option.setName("message")
+        .setDescription("Le message à envoyer")
+        .setRequired(false))
+    .addAttachmentOption(option =>
+      option.setName("image1")
+        .setDescription("Image facultative à envoyer"))
+    .addAttachmentOption(option =>
+      option.setName("image2")
+        .setDescription("Deuxième image facultative"))
+    .addAttachmentOption(option =>
+      option.setName("image3")
+        .setDescription("Troisième image facultative"))
+    .addAttachmentOption(option =>
+      option.setName("image4")
+        .setDescription("Quatrième image facultative"))
+    .addAttachmentOption(option =>
+      option.setName("image5")
+        .setDescription("Cinquième image facultative"))
+    .addAttachmentOption(option =>
+      option.setName("image6")
+        .setDescription("Sixième image facultative"))
+];
 
-// ========== Interaction ==========
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-  if (interaction.commandName !== 'écrire') return;
+const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-  const texte = interaction.options.getString('texte');
-  const images = [];
-
-  for (let i = 1; i <= 6; i++) {
-    const img = interaction.options.getAttachment(`image${i}`);
-    if (img) images.push(img);
-  }
-
-  if (!texte && images.length === 0) {
-    await interaction.reply({
-      content: 'Tu dois fournir au moins un texte ou une image.',
-      ephemeral: true
+client.once("ready", async () => {
+  console.log("✅ Bot prêt !");
+  try {
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
+      body: commands.map(cmd => cmd.toJSON())
     });
-    return;
+    console.log("✅ Commande /écrire enregistrée !");
+  } catch (err) {
+    console.error("Erreur d’enregistrement :", err);
   }
-
-  // ✅ Cache la commande (seul toi vois "Message envoyé")
-  await interaction.reply({ content: 'Message envoyé !', ephemeral: true });
-
-  // ✅ Message visible publiquement, anonymement
-  const messagePayload = {};
-  if (texte) messagePayload.content = texte;
-  if (images.length > 0) messagePayload.files = images;
-
-  await interaction.channel.send(messagePayload);
 });
 
-// ========== Enregistrement des commandes ==========
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
 
-(async () => {
-  try {
-    console.log('🚀 Déploiement des commandes...');
-    await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-      { body: commands }
-    );
-    console.log('✅ Commandes déployées !');
-  } catch (error) {
-    console.error('❌ Erreur lors du déploiement :', error);
+  if (interaction.commandName === "écrire") {
+    const message = interaction.options.getString("message");
+    const images = [
+      interaction.options.getAttachment("image1"),
+      interaction.options.getAttachment("image2"),
+      interaction.options.getAttachment("image3"),
+      interaction.options.getAttachment("image4"),
+      interaction.options.getAttachment("image5"),
+      interaction.options.getAttachment("image6")
+    ].filter(img => img);
+
+    const files = images.map(img => new AttachmentBuilder(img.url));
+
+    await interaction.reply({ content: "✅ Message envoyé !", ephemeral: true });
+
+    if (message || images.length > 0) {
+      await interaction.channel.send({
+        content: message || "",
+        files: files
+      });
+    }
   }
-})();
+});
 
-client.login(process.env.TOKEN);
+client.login(TOKEN);
